@@ -27,6 +27,7 @@ const cookieParser = require("cookie-parser");
 
 //database
 const connectDB = require("./config/connectDB");
+const setupAdminUser = require("./config/setupAdmin");
 
 //routers
 const authRouter = require("./routers/auth");
@@ -52,6 +53,9 @@ const port = process.env.PORT || 3040;
 const start = async () => {
   try {
     await connectDB(process.env.MONGO_URL);
+
+    await setupAdminUser();
+
     app.listen(
       port,
       console.log(
