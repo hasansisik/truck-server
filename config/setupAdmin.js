@@ -1,36 +1,62 @@
+const mongoose = require('mongoose');
 const User = require('../models/User');
+require('dotenv').config();
 
-const setupAdminUser = async () => {
+const connectDB = require('./connectDB');
+
+const setupUsers = async () => {
   try {
-    // Check if admin user with the specified email already exists
-    const adminEmail = 'birimajans@gmail.com';
-    
-    const existingAdmin = await User.findOne({ email: adminEmail });
-    
-    if (!existingAdmin) {
-      console.log('Creating default admin user...');
-      
-      // Create the admin user
-      const adminUser = new User({
-        name: 'Admin',
-        email: adminEmail,
+    await connectDB(process.env.MONGO_URI);
+    console.log('Connected to MongoDB...');
+
+    // Check if superadmin exists
+    const superadminExists = await User.findOne({ email: 'superadmin@example.com' });
+    if (!superadminExists) {
+      await User.create({
+        name: 'Super Admin',
+        email: 'superadmin@example.com',
+        auth: { password: 'password123' },
+        role: 'superadmin',
+        isVerified: true,
+        companyId: 'default'
+      });
+      console.log('Superadmin user created.');
+    }
+
+    // Check if admin exists
+    const adminExists = await User.findOne({ email: 'admin@example.com' });
+    if (!adminExists) {
+      await User.create({
+        name: 'Admin User',
+        email: 'admin@example.com',
+        auth: { password: 'password123' },
         role: 'admin',
         isVerified: true,
-        status: 'active',
-        companyId: 'default',
-        auth: {
-          password: 'Birim123.'
-        }
+        companyId: 'default'
       });
-      
-      await adminUser.save();
-      console.log('Default admin user created successfully!');
-    } else {
-      console.log('Admin user already exists, skipping creation.');
+      console.log('Admin user created.');
     }
+
+    // Check if regular user exists
+    const userExists = await User.findOne({ email: 'user@example.com' });
+    if (!userExists) {
+      await User.create({
+        name: 'Regular User',
+        email: 'user@example.com',
+        auth: { password: 'password123' },
+        role: 'user',
+        isVerified: true,
+        companyId: 'default'
+      });
+      console.log('Regular user created.');
+    }
+
+    console.log('Setup completed successfully.');
+    process.exit(0);
   } catch (error) {
-    console.error('Error setting up admin user:', error);
+    console.error('Error during setup:', error);
+    process.exit(1);
   }
 };
 
-module.exports = setupAdminUser; 
+setupUsers(); 

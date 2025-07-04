@@ -41,7 +41,7 @@ const UserSchema = new mongoose.Schema(
       unique: true,
       lowercase: true,
     },
-    role: { type: String, enum: ["admin", "user", "editor"], default: "user" },
+    role: { type: String, enum: ["superadmin", "admin", "user"], default: "user" },
     isVerified: { type: Boolean, default: false },
     address: AddressSchema, // Adres alt şeması
     auth: AuthSchema, // Kimlik doğrulama alt şeması

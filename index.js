@@ -31,6 +31,8 @@ const setupAdminUser = require("./config/setupAdmin");
 
 //routers
 const authRouter = require("./routers/auth");
+const towRouter = require("./routers/tow");
+
 //midlleware
 const notFoundMiddleware = require("./middleware/not-found");
 const erorHandlerMiddleware = require("./middleware/eror-handler");
@@ -43,7 +45,7 @@ app.use(cookieParser(process.env.JWT_SECRET_KEY));
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/v1/auth", authRouter);
-
+app.use("/v1/tows", towRouter);
 
 app.use(notFoundMiddleware);
 app.use(erorHandlerMiddleware);
