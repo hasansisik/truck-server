@@ -73,17 +73,32 @@ const createTow = async (req, res) => {
   }
 };
 
-// Update a tow
+// Update a tow - Only admin and superadmin can update
 const updateTow = async (req, res) => {
   try {
     const { id: towId } = req.params;
     const user = await User.findById(req.user.userId);
+    
+    // Check if user has permission to update
+    if (user.role === 'user') {
+      return res.status(StatusCodes.FORBIDDEN).json({ 
+        message: "Bu işlemi yapmak için yetkiniz yok. Sadece admin ve superadmin güncelleyebilir." 
+      });
+    }
     
     const tow = await Tow.findOne({ _id: towId, companyId: user.companyId });
     
     if (!tow) {
       return res.status(StatusCodes.NOT_FOUND).json({ 
         message: "Çekme kaydı bulunamadı" 
+      });
+    }
+    
+    // Superadmin can update any tow
+    // Admin can only update tows in their company
+    if (user.role === 'admin' && tow.companyId !== user.companyId) {
+      return res.status(StatusCodes.FORBIDDEN).json({ 
+        message: "Farklı şirketlere ait çekme kayıtlarını güncelleyemezsiniz" 
       });
     }
     
@@ -105,13 +120,20 @@ const updateTow = async (req, res) => {
   }
 };
 
-// Delete a tow
+// Delete a tow - Only superadmin can delete
 const deleteTow = async (req, res) => {
   try {
     const { id: towId } = req.params;
     const user = await User.findById(req.user.userId);
     
-    const tow = await Tow.findOne({ _id: towId, companyId: user.companyId });
+    // Check if user has permission to delete
+    if (user.role !== 'superadmin') {
+      return res.status(StatusCodes.FORBIDDEN).json({ 
+        message: "Bu işlemi yapmak için yetkiniz yok. Sadece superadmin silebilir." 
+      });
+    }
+    
+    const tow = await Tow.findOne({ _id: towId });
     
     if (!tow) {
       return res.status(StatusCodes.NOT_FOUND).json({ 

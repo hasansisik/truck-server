@@ -75,16 +75,26 @@ const againEmail = async (req, res) => {
   res.json({ message: "Doğrulama kodu Gönderildi" });
 };
 
-//Register (Admin Only)
+//Register (Admin and SuperAdmin Only)
 const register = async (req, res, next) => {
   try {   
-    // Check if the requesting user is admin
-    const admin = await User.findById(req.user.userId);
-    if (!admin || admin.role !== 'admin') {
-      throw new CustomError.UnauthorizedError("Bu işlemi sadece admin yapabilir");
+    // Check if the requesting user is admin or superadmin
+    const requestingUser = await User.findById(req.user.userId);
+    if (!requestingUser || (requestingUser.role !== 'admin' && requestingUser.role !== 'superadmin')) {
+      throw new CustomError.UnauthorizedError("Bu işlemi sadece admin veya superadmin yapabilir");
     }
 
     const { name, email, password, picture, role, companyId } = req.body;
+
+    // Only superadmin can create admin users
+    if (role === 'admin' && requestingUser.role !== 'superadmin') {
+      throw new CustomError.UnauthorizedError("Admin kullanıcıları sadece superadmin oluşturabilir");
+    }
+
+    // Nobody can create superadmin users except superadmin
+    if (role === 'superadmin' && requestingUser.role !== 'superadmin') {
+      throw new CustomError.UnauthorizedError("Superadmin kullanıcıları sadece superadmin oluşturabilir");
+    }
 
     //check email
     const emailAlreadyExists = await User.findOne({ email });
@@ -92,8 +102,8 @@ const register = async (req, res, next) => {
       throw new CustomError.BadRequestError("Bu e-posta adresi zaten kayıtlı.");
     }
 
-    // Use admin's company ID if not specified
-    const userCompanyId = companyId || admin.companyId;
+    // Use requesting user's company ID if not specified
+    const userCompanyId = companyId || requestingUser.companyId;
 
     const user = new User({
       name,
@@ -281,7 +291,7 @@ const resetPassword = async (req, res) => {
   res.send("reset password");
 };
 
-//Edit Profile (Admin Only for password changes)
+//Edit Profile (Role-based permissions)
 const editProfile = async (req, res) => {
   try {
     const requestingUser = await User.findById(req.user.userId);
@@ -295,37 +305,67 @@ const editProfile = async (req, res) => {
     const { name, email, password, picture, companyId } = req.body;
     
     // Check permissions
+    const isSuperAdmin = requestingUser.role === 'superadmin';
     const isAdmin = requestingUser.role === 'admin';
     const isOwnProfile = requestingUser._id.toString() === targetUser._id.toString();
     const isSameCompany = requestingUser.companyId === targetUser.companyId;
     
-    // Only admin can edit other users, and only within the same company
-    if (!isOwnProfile && (!isAdmin || !isSameCompany)) {
-      throw new CustomError.UnauthorizedError("Bu işlemi yapmak için yetkiniz yok");
+    // Permission checks based on roles
+    if (!isOwnProfile) {
+      // SuperAdmin can edit anyone
+      if (!isSuperAdmin) {
+        // Admin can only edit users in their company
+        if (!isAdmin || !isSameCompany) {
+          throw new CustomError.UnauthorizedError("Bu işlemi yapmak için yetkiniz yok");
+        }
+        
+        // Admin cannot edit other admins or superadmins
+        if ((targetUser.role === 'admin' || targetUser.role === 'superadmin') && !isSuperAdmin) {
+          throw new CustomError.UnauthorizedError("Admin veya superadmin kullanıcıları sadece superadmin düzenleyebilir");
+        }
+      }
     }
     
-    // Only admin can change passwords
-    if (password && !isAdmin) {
-      throw new CustomError.UnauthorizedError("Şifre değişikliği sadece admin tarafından yapılabilir");
+    // Only superadmin or admin can change passwords
+    if (password && !(isSuperAdmin || isAdmin)) {
+      throw new CustomError.UnauthorizedError("Şifre değişikliği sadece admin veya superadmin tarafından yapılabilir");
     }
 
-    // Only admin can change company ID
-    if (companyId && !isAdmin) {
-      throw new CustomError.UnauthorizedError("Şirket bilgisi değişikliği sadece admin tarafından yapılabilir");
+    // Only superadmin can change company ID
+    if (companyId && !isSuperAdmin) {
+      throw new CustomError.UnauthorizedError("Şirket bilgisi değişikliği sadece superadmin tarafından yapılabilir");
     }
 
     if (name) targetUser.name = name;
-    if (email && isAdmin) {
-      // Check if new email already exists
-      const emailExists = await User.findOne({ email, _id: { $ne: targetUser._id } });
-      if (emailExists) {
-        throw new CustomError.BadRequestError("Bu e-posta adresi zaten kayıtlı.");
+    
+    // Email changes require higher permissions
+    if (email) {
+      if (isSuperAdmin || (isAdmin && targetUser.role === 'user')) {
+        // Check if new email already exists
+        const emailExists = await User.findOne({ email, _id: { $ne: targetUser._id } });
+        if (emailExists) {
+          throw new CustomError.BadRequestError("Bu e-posta adresi zaten kayıtlı.");
+        }
+        targetUser.email = email;
+      } else {
+        throw new CustomError.UnauthorizedError("E-posta değişikliği için yeterli yetkiniz yok");
       }
-      targetUser.email = email;
     }
-    if (password && isAdmin) targetUser.auth.password = password;
+    
+    // Password changes based on role
+    if (password) {
+      if (isSuperAdmin || (isAdmin && targetUser.role === 'user')) {
+        targetUser.auth.password = password;
+      } else {
+        throw new CustomError.UnauthorizedError("Şifre değişikliği için yeterli yetkiniz yok");
+      }
+    }
+    
+    // Picture can be changed by the user themselves or higher roles
     if (picture) targetUser.profile.picture = picture;
-    if (companyId && isAdmin) targetUser.companyId = companyId;
+    
+    // Only superadmin can change company ID
+    if (companyId && isSuperAdmin) targetUser.companyId = companyId;
 
     await targetUser.save();
 
@@ -355,10 +395,9 @@ const editProfile = async (req, res) => {
   }
 };
 
-// Get All Users
+// Get All Users (with role-based filtering)
 const getAllUsers = async (req, res) => {
   try {
-    // Only get users from the same company as the requesting user
     const requestingUser = await User.findById(req.user.userId);
     
     if (!requestingUser) {
@@ -367,7 +406,26 @@ const getAllUsers = async (req, res) => {
       });
     }
 
-    const users = await User.find({ companyId: requestingUser.companyId })
+    let query = {};
+    
+    // Role-based filtering:
+    // - Superadmin can see all users
+    // - Admin can only see users from their company
+    // - Regular users can only see users from their company
+    if (requestingUser.role === 'superadmin') {
+      // Superadmin can see all users, no filter needed
+      query = {};
+    } else {
+      // Admin and regular users can only see users from their company
+      query = { companyId: requestingUser.companyId };
+      
+      // Regular users can't see admin or superadmin users
+      if (requestingUser.role === 'user') {
+        query.role = 'user';
+      }
+    }
+
+    const users = await User.find(query)
       .select('name email role status createdAt companyId');
     
     res.status(StatusCodes.OK).json({ users });
@@ -379,18 +437,18 @@ const getAllUsers = async (req, res) => {
   }
 };
 
-// Edit User (Admin Only)
+// Edit User (Admin and SuperAdmin Only)
 const editUsers = async (req, res) => {
   try {
     const { userId } = req.params;
     const { name, email, password, role, status, picture, companyId } = req.body;
 
-    const admin = await User.findById(req.user.userId);
+    const requestingUser = await User.findById(req.user.userId);
 
-    // Check if the requesting user is admin
-    if (admin.role !== 'admin') {
+    // Check if the requesting user is admin or superadmin
+    if (!requestingUser || (requestingUser.role !== 'admin' && requestingUser.role !== 'superadmin')) {
       return res.status(StatusCodes.FORBIDDEN).json({ 
-        message: "Bu işlemi sadece admin yapabilir" 
+        message: "Bu işlemi sadece admin veya superadmin yapabilir" 
       });
     }
 
@@ -402,9 +460,23 @@ const editUsers = async (req, res) => {
     }
 
     // Admin can only edit users in their company
-    if (user.companyId !== admin.companyId) {
+    if (requestingUser.role !== 'superadmin' && user.companyId !== requestingUser.companyId) {
       return res.status(StatusCodes.FORBIDDEN).json({ 
         message: "Farklı şirket kullanıcılarını düzenleyemezsiniz" 
+      });
+    }
+
+    // Only superadmin can edit admin or superadmin users
+    if ((user.role === 'admin' || user.role === 'superadmin') && requestingUser.role !== 'superadmin') {
+      return res.status(StatusCodes.FORBIDDEN).json({ 
+        message: "Admin veya superadmin kullanıcıları sadece superadmin düzenleyebilir" 
+      });
+    }
+
+    // Only superadmin can change user roles to admin or superadmin
+    if (role && (role === 'admin' || role === 'superadmin') && requestingUser.role !== 'superadmin') {
+      return res.status(StatusCodes.FORBIDDEN).json({ 
+        message: "Kullanıcı rolünü admin veya superadmin olarak sadece superadmin değiştirebilir" 
       });
     }
 
@@ -419,12 +491,19 @@ const editUsers = async (req, res) => {
       user.email = email;
     }
     if (password) user.auth.password = password;
-    if (role) user.role = role;
+    if (role && (requestingUser.role === 'superadmin' || role === 'user')) user.role = role;
     if (status !== undefined) user.status = status;
     if (picture) user.profile.picture = picture;
-    // Company ID can only be changed to the admin's own company ID
-    if (companyId && companyId === admin.companyId) {
-      user.companyId = companyId;
+    
+    // Company ID handling
+    if (companyId) {
+      if (requestingUser.role === 'superadmin') {
+        // Superadmin can change to any company ID
+        user.companyId = companyId;
+      } else if (companyId === requestingUser.companyId) {
+        // Admin can only change to their own company ID
+        user.companyId = companyId;
+      }
     }
 
     await user.save();
@@ -450,16 +529,16 @@ const editUsers = async (req, res) => {
   }
 };
 
-// Delete User (Admin Only)
+// Delete User (SuperAdmin Only)
 const deleteUser = async (req, res) => {
   try {
     const { userId } = req.params;
-    const admin = await User.findById(req.user.userId);
+    const requestingUser = await User.findById(req.user.userId);
   
-    // Check if the requesting user is admin
-    if (admin.role !== 'admin') {
+    // Check if the requesting user is superadmin
+    if (!requestingUser || requestingUser.role !== 'superadmin') {
       return res.status(StatusCodes.FORBIDDEN).json({ 
-        message: "Bu işlemi sadece admin yapabilir" 
+        message: "Bu işlemi sadece superadmin yapabilir" 
       });
     }
 
@@ -470,10 +549,10 @@ const deleteUser = async (req, res) => {
       });
     }
 
-    // Admin can only delete users in their company
-    if (user.companyId !== admin.companyId) {
+    // Cannot delete yourself
+    if (user._id.toString() === requestingUser._id.toString()) {
       return res.status(StatusCodes.FORBIDDEN).json({ 
-        message: "Farklı şirket kullanıcılarını silemezsiniz" 
+        message: "Kendi hesabınızı silemezsiniz" 
       });
     }
 

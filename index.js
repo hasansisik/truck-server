@@ -5,6 +5,7 @@ const cors = require("cors");
 const express = require("express");
 const app = express();
 
+
 // CORS configuration
 app.use(cors({
   origin: function(origin, callback) {
@@ -30,6 +31,9 @@ const connectDB = require("./config/connectDB");
 //routers
 const authRouter = require("./routers/auth");
 const towRouter = require("./routers/tow");
+const vehicleRouter = require("./routers/vehicle");
+const driverRouter = require("./routers/driver");
+const companyRouter = require("./routers/company");
 
 //midlleware
 const notFoundMiddleware = require("./middleware/not-found");
@@ -43,7 +47,10 @@ app.use(cookieParser(process.env.JWT_SECRET_KEY));
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/v1/auth", authRouter);
-app.use("/v1/tows", towRouter);
+app.use("/v1/tow", towRouter);
+app.use("/v1/vehicles", vehicleRouter);
+app.use("/v1/drivers", driverRouter);
+app.use("/v1/companies", companyRouter);
 
 app.use(notFoundMiddleware);
 app.use(erorHandlerMiddleware);
