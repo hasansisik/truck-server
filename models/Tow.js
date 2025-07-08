@@ -31,6 +31,10 @@ const TowSchema = new mongoose.Schema(
       required: [true, "Firma bilgisi gereklidir"],
       trim: true,
     },
+    serviceFee: {
+      type: Number,
+      default: 0,
+    },
     images: {
       type: [String],
       default: [],
