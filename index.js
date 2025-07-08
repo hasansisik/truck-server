@@ -34,6 +34,7 @@ const towRouter = require("./routers/tow");
 const vehicleRouter = require("./routers/vehicle");
 const driverRouter = require("./routers/driver");
 const companyRouter = require("./routers/company");
+const expenseRouter = require("./routers/expense");
 
 //midlleware
 const notFoundMiddleware = require("./middleware/not-found");
@@ -51,6 +52,7 @@ app.use("/v1/tow", towRouter);
 app.use("/v1/vehicles", vehicleRouter);
 app.use("/v1/drivers", driverRouter);
 app.use("/v1/companies", companyRouter);
+app.use("/v1/expenses", expenseRouter);
 
 app.use(notFoundMiddleware);
 app.use(erorHandlerMiddleware);
