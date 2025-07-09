@@ -15,10 +15,7 @@ router.use(isAuthenticated);
 
 // Routes with specific permissions
 router.route("/").get(getAllTows).post(createTow);
-router.route("/:id").get(getTow);
-
-// Admin or superadmin only routes
-router.put("/:id", isAdminOrSuperAdmin, updateTow);
+router.route("/:id").get(getTow).put(updateTow);
 
 // Superadmin only routes
 router.delete("/:id", isSuperAdmin, deleteTow);

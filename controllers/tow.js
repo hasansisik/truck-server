@@ -3,7 +3,7 @@ const User = require("../models/User");
 const { StatusCodes } = require("http-status-codes");
 const CustomError = require("../errors");
 
-// Get all tows for the user's company
+// Get all tows based on user role
 const getAllTows = async (req, res) => {
   try {
     const user = await User.findById(req.user.userId);
@@ -14,7 +14,24 @@ const getAllTows = async (req, res) => {
       });
     }
 
-    const tows = await Tow.find({ companyId: user.companyId });
+    let tows;
+    
+    // Role-based filtering
+    if (user.role === 'user') {
+      // Regular users can only see their own tow records
+      tows = await Tow.find({ 
+        companyId: user.companyId,
+        userId: req.user.userId 
+      }).populate('userId', 'name email');
+    } else if (user.role === 'admin' || user.role === 'superadmin') {
+      // Admin and superadmin can see all tows in their company
+      tows = await Tow.find({ companyId: user.companyId })
+        .populate('userId', 'name email');
+    } else {
+      return res.status(StatusCodes.FORBIDDEN).json({ 
+        message: "Yetkisiz erişim" 
+      });
+    }
     
     res.status(StatusCodes.OK).json({ tows });
   } catch (error) {
@@ -25,13 +42,33 @@ const getAllTows = async (req, res) => {
   }
 };
 
-// Get a single tow
+// Get a single tow based on user role
 const getTow = async (req, res) => {
   try {
     const { id: towId } = req.params;
     const user = await User.findById(req.user.userId);
     
-    const tow = await Tow.findOne({ _id: towId, companyId: user.companyId });
+    let tow;
+    
+    // Role-based access
+    if (user.role === 'user') {
+      // Regular users can only see their own tow records
+      tow = await Tow.findOne({ 
+        _id: towId, 
+        companyId: user.companyId,
+        userId: req.user.userId 
+      }).populate('userId', 'name email');
+    } else if (user.role === 'admin' || user.role === 'superadmin') {
+      // Admin and superadmin can see all tows in their company
+      tow = await Tow.findOne({ 
+        _id: towId, 
+        companyId: user.companyId 
+      }).populate('userId', 'name email');
+    } else {
+      return res.status(StatusCodes.FORBIDDEN).json({ 
+        message: "Yetkisiz erişim" 
+      });
+    }
     
     if (!tow) {
       return res.status(StatusCodes.NOT_FOUND).json({ 
@@ -73,32 +110,40 @@ const createTow = async (req, res) => {
   }
 };
 
-// Update a tow - Only admin and superadmin can update
+// Update a tow - Role-based permissions
 const updateTow = async (req, res) => {
   try {
     const { id: towId } = req.params;
     const user = await User.findById(req.user.userId);
     
-    // Check if user has permission to update
+    let tow;
+    
+    // Role-based access and update permissions
     if (user.role === 'user') {
-      return res.status(StatusCodes.FORBIDDEN).json({ 
-        message: "Bu işlemi yapmak için yetkiniz yok. Sadece admin ve superadmin güncelleyebilir." 
+      // Regular users can only update their own tow records
+      tow = await Tow.findOne({ 
+        _id: towId, 
+        companyId: user.companyId,
+        userId: req.user.userId 
       });
-    }
-    
-    const tow = await Tow.findOne({ _id: towId, companyId: user.companyId });
-    
-    if (!tow) {
-      return res.status(StatusCodes.NOT_FOUND).json({ 
-        message: "Çekme kaydı bulunamadı" 
-      });
-    }
-    
-    // Superadmin can update any tow
-    // Admin can only update tows in their company
-    if (user.role === 'admin' && tow.companyId !== user.companyId) {
+      
+      if (!tow) {
+        return res.status(StatusCodes.NOT_FOUND).json({ 
+          message: "Çekme kaydı bulunamadı veya güncelleme yetkiniz yok" 
+        });
+      }
+    } else if (user.role === 'admin' || user.role === 'superadmin') {
+      // Admin and superadmin can update all tows in their company
+      tow = await Tow.findOne({ _id: towId, companyId: user.companyId });
+      
+      if (!tow) {
+        return res.status(StatusCodes.NOT_FOUND).json({ 
+          message: "Çekme kaydı bulunamadı" 
+        });
+      }
+    } else {
       return res.status(StatusCodes.FORBIDDEN).json({ 
-        message: "Farklı şirketlere ait çekme kayıtlarını güncelleyemezsiniz" 
+        message: "Yetkisiz erişim" 
       });
     }
     
@@ -106,7 +151,7 @@ const updateTow = async (req, res) => {
       towId,
       req.body,
       { new: true, runValidators: true }
-    );
+    ).populate('userId', 'name email');
     
     res.status(StatusCodes.OK).json({ 
       message: "Çekme kaydı başarıyla güncellendi",
