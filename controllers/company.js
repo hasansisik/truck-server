@@ -66,6 +66,7 @@ const createCompany = async (req, res) => {
       company 
     });
   } catch (error) {
+    console.log(error);
     if (error instanceof CustomError.UnauthorizedError) {
       res.status(error.statusCode).json({ message: error.message });
     } else {
