@@ -32,7 +32,6 @@ const connectDB = require("./config/connectDB");
 const authRouter = require("./routers/auth");
 const towRouter = require("./routers/tow");
 const vehicleRouter = require("./routers/vehicle");
-const driverRouter = require("./routers/driver");
 const companyRouter = require("./routers/company");
 const expenseRouter = require("./routers/expense");
 
@@ -50,7 +49,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/v1/auth", authRouter);
 app.use("/v1/tow", towRouter);
 app.use("/v1/vehicles", vehicleRouter);
-app.use("/v1/drivers", driverRouter);
 app.use("/v1/companies", companyRouter);
 app.use("/v1/expenses", expenseRouter);
 

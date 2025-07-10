@@ -25,31 +25,49 @@ const ProfileSchema = new mongoose.Schema({
       },
       message: (props) => `${props.value} is not a valid phone number!`,
     },
+  }
+});
+
+// Driver specific fields
+const DriverInfoSchema = new mongoose.Schema({
+  license: { 
+    type: String, 
+    trim: true 
   },
-  picture: {
-    type: String,
-    default: "https://cdn-icons-png.freepik.com/512/8188/8188362.png",
+  experience: { 
+    type: Number
   },
+  isDriver: {
+    type: Boolean,
+    default: false
+  }
 });
 
 const UserSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
+    username: { 
+      type: String, 
+      unique: true, 
+      trim: true,
+      sparse: true // Allows null values to not be considered for uniqueness
+    },
     email: {
       type: String,
-      required: [true, "Please provide your email address"],
       unique: true,
       lowercase: true,
+      sparse: true // Allow null values to not be considered for uniqueness
     },
-    role: { type: String, enum: ["superadmin", "admin", "user"], default: "user" },
+    role: { type: String, enum: ["superadmin", "admin", "driver"], default: "driver" },
     isVerified: { type: Boolean, default: false },
     address: AddressSchema, // Adres alt şeması
     auth: AuthSchema, // Kimlik doğrulama alt şeması
     profile: ProfileSchema, // Profil bilgileri alt şeması
+    driverInfo: DriverInfoSchema, // Şoför bilgileri alt şeması
     status: {
       type: String,
       enum: {
-        values: ['active', 'inactive'],
+        values: ['active', 'inactive', 'onleave'],
         message: '{VALUE} geçerli bir durum değil'
       },
       default: 'active'

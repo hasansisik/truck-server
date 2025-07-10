@@ -36,6 +36,20 @@ const isAdminOrSuperAdmin = async function (req, res, next) {
   next();
 };
 
+const isDriver = async function (req, res, next) {
+  if (!req.user || req.user.role !== "driver") {
+    return next(createHttpError.Unauthorized("Şoför yetkisi gerekli"));
+  }
+  next();
+};
+
+const isDriverOrAdmin = async function (req, res, next) {
+  if (!req.user || (req.user.role !== "driver" && req.user.role !== "admin" && req.user.role !== "superadmin")) {
+    return next(createHttpError.Unauthorized("Şoför, Admin veya Superadmin yetkisi gerekli"));
+  }
+  next();
+};
+
 const checkRole = function(roles) {
   return async (req, res, next) => {
     if (!req.user || !roles.includes(req.user.role)) {
@@ -50,5 +64,7 @@ module.exports = {
   isAdmin,
   isSuperAdmin,
   isAdminOrSuperAdmin,
+  isDriver,
+  isDriverOrAdmin,
   checkRole
 };

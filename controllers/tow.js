@@ -28,9 +28,7 @@ const getAllTows = async (req, res) => {
       tows = await Tow.find({ companyId: user.companyId })
         .populate('userId', 'name email');
     } else {
-      return res.status(StatusCodes.FORBIDDEN).json({ 
-        message: "Yetkisiz erişim" 
-      });
+
     }
     
     res.status(StatusCodes.OK).json({ tows });
@@ -65,9 +63,7 @@ const getTow = async (req, res) => {
         companyId: user.companyId 
       }).populate('userId', 'name email');
     } else {
-      return res.status(StatusCodes.FORBIDDEN).json({ 
-        message: "Yetkisiz erişim" 
-      });
+
     }
     
     if (!tow) {
@@ -142,9 +138,7 @@ const updateTow = async (req, res) => {
         });
       }
     } else {
-      return res.status(StatusCodes.FORBIDDEN).json({ 
-        message: "Yetkisiz erişim" 
-      });
+
     }
     
     const updatedTow = await Tow.findByIdAndUpdate(

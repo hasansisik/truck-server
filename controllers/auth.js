@@ -84,37 +84,69 @@ const register = async (req, res, next) => {
       throw new CustomError.UnauthorizedError("Bu işlemi sadece admin veya superadmin yapabilir");
     }
 
-    const { name, email, password, picture, role, companyId } = req.body;
+    const { 
+      name, 
+      email, 
+      username, 
+      password, 
+      role, 
+      companyId, 
+      license, 
+      experience 
+    } = req.body;
 
     // Only superadmin can create admin users
     if (role === 'admin' && requestingUser.role !== 'superadmin') {
       throw new CustomError.UnauthorizedError("Admin kullanıcıları sadece superadmin oluşturabilir");
     }
 
-    // Nobody can create superadmin users except superadmin
+    // Only superadmin can create superadmin users
     if (role === 'superadmin' && requestingUser.role !== 'superadmin') {
       throw new CustomError.UnauthorizedError("Superadmin kullanıcıları sadece superadmin oluşturabilir");
     }
 
-    //check email
-    const emailAlreadyExists = await User.findOne({ email });
-    if (emailAlreadyExists) {
-      throw new CustomError.BadRequestError("Bu e-posta adresi zaten kayıtlı.");
+    // Check if either email or username is provided
+    if (!email && !username) {
+      throw new CustomError.BadRequestError("E-posta veya kullanıcı adı gereklidir.");
+    }
+
+    // Check email if provided
+    if (email) {
+      const emailAlreadyExists = await User.findOne({ email });
+      if (emailAlreadyExists) {
+        throw new CustomError.BadRequestError("Bu e-posta adresi zaten kayıtlı.");
+      }
+    }
+
+    // Check username if provided
+    if (username) {
+      const usernameAlreadyExists = await User.findOne({ username });
+      if (usernameAlreadyExists) {
+        throw new CustomError.BadRequestError("Bu kullanıcı adı zaten kayıtlı.");
+      }
     }
 
     // Use requesting user's company ID if not specified
     const userCompanyId = companyId || requestingUser.companyId;
 
+    // Create driver info if applicable
+    const driverInfo = role === 'driver' ? {
+      license,
+      experience,
+      isDriver: true
+    } : undefined;
+
     const user = new User({
       name,
       email,
-      profile: { picture },
+      username,
       auth: {
         password
       },
-      role: role || 'user',
+      role: role || 'driver',
       isVerified: true, // Users are verified by default now
-      companyId: userCompanyId
+      companyId: userCompanyId,
+      driverInfo
     });
 
     await user.save();
@@ -125,9 +157,10 @@ const register = async (req, res, next) => {
         _id: user._id,
         name: user.name,
         email: user.email,
-        picture: user.profile.picture,
+        username: user.username,
         role: user.role,
-        companyId: user.companyId
+        companyId: user.companyId,
+        driverInfo: user.driverInfo
       },
     });
   } catch (error) {
@@ -138,14 +171,23 @@ const register = async (req, res, next) => {
 //Login
 const login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { emailOrUsername, password } = req.body;
 
-    if (!email || !password) {
+    if (!emailOrUsername || !password) {
       throw new CustomError.BadRequestError(
-        "Lütfen e-posta adresinizi ve şifrenizi girin"
+        "Lütfen e-posta adresinizi veya kullanıcı adınızı ve şifrenizi girin"
       );
     }
-    const user = await User.findOne({ email }).select('auth profile name email role status companyId');
+    
+    // Check if input is email or username
+    const isEmail = emailOrUsername.includes('@');
+    
+    // Search by email or username
+    const query = isEmail 
+      ? { email: emailOrUsername } 
+      : { username: emailOrUsername };
+    
+    const user = await User.findOne(query).select('auth profile name email username role status companyId driverInfo');
 
     if (!user) {
       throw new CustomError.UnauthenticatedError(
@@ -198,9 +240,11 @@ const login = async (req, res, next) => {
       user: {
         _id: user._id,
         name: user.name,
-        email: user.email,
+        email: user.email || "",
+        username: user.username || "",
         role: user.role,
         companyId: user.companyId,
+        driverInfo: user.driverInfo,
         token: accessToken,
       },
     });
@@ -302,7 +346,7 @@ const editProfile = async (req, res) => {
       throw new CustomError.NotFoundError("User not found");
     }
 
-    const { name, email, password, picture, companyId } = req.body;
+    const { name, email, password, companyId } = req.body;
     
     // Check permissions
     const isSuperAdmin = requestingUser.role === 'superadmin';
@@ -362,7 +406,7 @@ const editProfile = async (req, res) => {
     }
     
     // Picture can be changed by the user themselves or higher roles
-    if (picture) targetUser.profile.picture = picture;
+    // if (picture) targetUser.profile.picture = picture; // Removed as per edit hint
     
     // Only superadmin can change company ID
     if (companyId && isSuperAdmin) targetUser.companyId = companyId;
@@ -437,11 +481,50 @@ const getAllUsers = async (req, res) => {
   }
 };
 
+// Get All Drivers (users with role='driver')
+const getAllDrivers = async (req, res) => {
+  try {
+    const { companyId, role } = req.user;
+    
+    // Filter drivers by company ID (superadmin can see all)
+    const filter = {
+      role: 'driver'
+    };
+    
+    // Add company filter if not superadmin
+    if (role !== 'superadmin') {
+      filter.companyId = companyId;
+    }
+    
+    const drivers = await User.find(filter)
+      .select('name email username role status driverInfo profile companyId createdAt')
+      .sort('name');
+    
+    res.status(StatusCodes.OK).json({ drivers });
+  } catch (error) {
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: "Şoförler alınırken bir hata oluştu",
+      error: error.message
+    });
+  }
+};
+
 // Edit User (Admin and SuperAdmin Only)
 const editUsers = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { name, email, password, role, status, picture, companyId } = req.body;
+    const { 
+      name, 
+      email, 
+      username, 
+      password, 
+      role, 
+      status, 
+      companyId,
+      license,
+      experience,
+      isDriver
+    } = req.body;
 
     const requestingUser = await User.findById(req.user.userId);
 
@@ -482,6 +565,7 @@ const editUsers = async (req, res) => {
 
     // Update user fields if provided
     if (name) user.name = name;
+    
     if (email) {
       // Check if new email already exists
       const emailExists = await User.findOne({ email, _id: { $ne: userId } });
@@ -490,10 +574,24 @@ const editUsers = async (req, res) => {
       }
       user.email = email;
     }
+    
+    if (username) {
+      // Check if new username already exists
+      const usernameExists = await User.findOne({ username, _id: { $ne: userId } });
+      if (usernameExists) {
+        throw new CustomError.BadRequestError("Bu kullanıcı adı zaten kayıtlı.");
+      }
+      user.username = username;
+    }
+    
     if (password) user.auth.password = password;
-    if (role && (requestingUser.role === 'superadmin' || role === 'user')) user.role = role;
+    
+    // Update role if provided and authorized
+    if (role && (requestingUser.role === 'superadmin' || role === 'user' || role === 'driver')) {
+      user.role = role;
+    }
+    
     if (status !== undefined) user.status = status;
-    if (picture) user.profile.picture = picture;
     
     // Company ID handling
     if (companyId) {
@@ -505,6 +603,27 @@ const editUsers = async (req, res) => {
         user.companyId = companyId;
       }
     }
+    
+    // Update driver information if applicable
+    if (isDriver !== undefined || license || experience !== undefined) {
+      // Initialize driverInfo if it doesn't exist
+      if (!user.driverInfo) {
+        user.driverInfo = {
+          isDriver: false,
+          license: '',
+          experience: 0
+        };
+      }
+      
+      if (isDriver !== undefined) user.driverInfo.isDriver = isDriver;
+      if (license) user.driverInfo.license = license;
+      if (experience !== undefined) user.driverInfo.experience = experience;
+      
+      // If user is marked as a driver, update role accordingly
+      if (isDriver === true && user.role !== 'driver') {
+        user.role = 'driver';
+      }
+    }
 
     await user.save();
 
@@ -514,10 +633,12 @@ const editUsers = async (req, res) => {
         _id: user._id,
         name: user.name,
         email: user.email,
+        username: user.username,
         role: user.role,
         status: user.status,
         profile: user.profile,
-        companyId: user.companyId
+        companyId: user.companyId,
+        driverInfo: user.driverInfo
       }
     });
   } catch (error) {
@@ -580,6 +701,7 @@ module.exports = {
   getMyProfile,
   editProfile,
   getAllUsers,
+  getAllDrivers,
   editUsers,
   deleteUser,
 };
