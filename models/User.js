@@ -52,12 +52,7 @@ const UserSchema = new mongoose.Schema(
       unique: true, 
       trim: true
     },
-    email: {
-      type: String,
-      unique: true,
-      lowercase: true,
-      sparse: true // Allow null values to not be considered for uniqueness
-    },
+
     role: { type: String, enum: ["superadmin", "admin", "driver"], default: "driver" },
     isVerified: { type: Boolean, default: false },
     address: AddressSchema, // Adres alt şeması
