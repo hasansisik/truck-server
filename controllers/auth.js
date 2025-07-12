@@ -105,9 +105,9 @@ const register = async (req, res, next) => {
       throw new CustomError.UnauthorizedError("Superadmin kullanıcıları sadece superadmin oluşturabilir");
     }
 
-    // Check if either email or username is provided
-    if (!email && !username) {
-      throw new CustomError.BadRequestError("E-posta veya kullanıcı adı gereklidir.");
+    // Check if username is provided
+    if (!username) {
+      throw new CustomError.BadRequestError("Kullanıcı adı gereklidir.");
     }
 
     // Check email if provided
@@ -136,9 +136,8 @@ const register = async (req, res, next) => {
       isDriver: true
     } : undefined;
 
-    const user = new User({
+    const userData = {
       name,
-      email,
       username,
       auth: {
         password
@@ -147,7 +146,14 @@ const register = async (req, res, next) => {
       isVerified: true, // Users are verified by default now
       companyId: userCompanyId,
       driverInfo
-    });
+    };
+
+    // Only add email if it's provided
+    if (email) {
+      userData.email = email;
+    }
+
+    const user = new User(userData);
 
     await user.save();
 
@@ -156,7 +162,7 @@ const register = async (req, res, next) => {
       user: {
         _id: user._id,
         name: user.name,
-        email: user.email,
+        email: user.email || "",
         username: user.username,
         role: user.role,
         companyId: user.companyId,
@@ -175,17 +181,17 @@ const login = async (req, res, next) => {
 
     if (!emailOrUsername || !password) {
       throw new CustomError.BadRequestError(
-        "Lütfen e-posta adresinizi veya kullanıcı adınızı ve şifrenizi girin"
+        "Lütfen kullanıcı adınızı ve şifrenizi girin"
       );
     }
     
-    // Check if input is email or username
-    const isEmail = emailOrUsername.includes('@');
-    
-    // Search by email or username
-    const query = isEmail 
-      ? { email: emailOrUsername } 
-      : { username: emailOrUsername };
+    // Search by username primarily, but also check email for backward compatibility
+    const query = { 
+      $or: [
+        { username: emailOrUsername },
+        { email: emailOrUsername }
+      ]
+    };
     
     const user = await User.findOne(query).select('auth profile name email username role status companyId driverInfo');
 
@@ -470,7 +476,7 @@ const getAllUsers = async (req, res) => {
     }
 
     const users = await User.find(query)
-      .select('name email role status createdAt companyId');
+      .select('name email username role status createdAt companyId driverInfo');
     
     res.status(StatusCodes.OK).json({ users });
   } catch (error) {
@@ -566,13 +572,18 @@ const editUsers = async (req, res) => {
     // Update user fields if provided
     if (name) user.name = name;
     
-    if (email) {
-      // Check if new email already exists
-      const emailExists = await User.findOne({ email, _id: { $ne: userId } });
-      if (emailExists) {
-        throw new CustomError.BadRequestError("Bu e-posta adresi zaten kayıtlı.");
+    if (email !== undefined) {
+      if (email) {
+        // Check if new email already exists
+        const emailExists = await User.findOne({ email, _id: { $ne: userId } });
+        if (emailExists) {
+          throw new CustomError.BadRequestError("Bu e-posta adresi zaten kayıtlı.");
+        }
+        user.email = email;
+      } else {
+        // Allow clearing email
+        user.email = undefined;
       }
-      user.email = email;
     }
     
     if (username) {
@@ -632,7 +643,7 @@ const editUsers = async (req, res) => {
       user: {
         _id: user._id,
         name: user.name,
-        email: user.email,
+        email: user.email || "",
         username: user.username,
         role: user.role,
         status: user.status,

@@ -48,9 +48,9 @@ const UserSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     username: { 
       type: String, 
+      required: true,
       unique: true, 
-      trim: true,
-      sparse: true // Allows null values to not be considered for uniqueness
+      trim: true
     },
     email: {
       type: String,
