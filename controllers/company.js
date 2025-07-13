@@ -5,11 +5,8 @@ const CustomError = require("../errors");
 // Get all companies (with role-based filtering)
 const getAllCompanies = async (req, res) => {
   try {
-    // Only superadmin can see all companies
-    // Admin and regular users can only see their own company
-    const companies = req.user.role === 'superadmin' 
-      ? await Company.find({}).sort('name')
-      : await Company.find({ _id: req.user.companyId });
+    // Return all companies for all users to fix dropdown issues
+    const companies = await Company.find({}).sort('name');
     
     res.status(StatusCodes.OK).json({ companies });
   } catch (error) {
