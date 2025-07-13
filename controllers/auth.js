@@ -3,9 +3,6 @@ const Token = require("../models/Token");
 const { StatusCodes } = require("http-status-codes");
 const CustomError = require("../errors");
 const { generateToken } = require("../services/token.service");
-const bcrypt = require('bcrypt');
-
-
 
 //Register (Admin and SuperAdmin Only)
 const register = async (req, res, next) => {
@@ -245,7 +242,7 @@ const editProfile = async (req, res) => {
     
     // Password changes based on role
     if (password) {
-      if (isSuperAdmin || (isAdmin && targetUser.role === 'user')) {
+      if (isSuperAdmin || (isAdmin && targetuser.role === 'driver')) {
         targetUser.auth.password = password;
       } else {
         throw new CustomError.UnauthorizedError("Şifre değişikliği için yeterli yetkiniz yok");
@@ -311,7 +308,7 @@ const getAllUsers = async (req, res) => {
       query = { companyId: requestingUser.companyId };
       
       // Regular users can't see admin or superadmin users
-      if (requestingUser.role === 'user') {
+      if (requestinguser.role === 'driver') {
         query.role = 'user';
       }
     }

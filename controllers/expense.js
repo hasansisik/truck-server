@@ -80,7 +80,7 @@ const updateExpense = async (req, res) => {
     const user = await User.findById(req.user.userId);
     
     // Check if user has permission to update
-    if (user.role === 'user') {
+    if (user.role === 'driver') {
       return res.status(StatusCodes.FORBIDDEN).json({ 
         message: "Bu işlemi yapmak için yetkiniz yok. Sadece admin ve superadmin güncelleyebilir." 
       });

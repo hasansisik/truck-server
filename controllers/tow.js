@@ -17,7 +17,7 @@ const getAllTows = async (req, res) => {
     let tows;
     
     // Role-based filtering
-    if (user.role === 'user') {
+    if (user.role === 'driver') {
       // Regular users can only see their own tow records
       tows = await Tow.find({ 
         companyId: user.companyId,
@@ -30,7 +30,8 @@ const getAllTows = async (req, res) => {
     } else {
 
     }
-    
+
+    console.log(tows);
     res.status(StatusCodes.OK).json({ tows });
   } catch (error) {
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
@@ -49,7 +50,7 @@ const getTow = async (req, res) => {
     let tow;
     
     // Role-based access
-    if (user.role === 'user') {
+    if (user.role === 'driver') {
       // Regular users can only see their own tow records
       tow = await Tow.findOne({ 
         _id: towId, 
@@ -115,7 +116,7 @@ const updateTow = async (req, res) => {
     let tow;
     
     // Role-based access and update permissions
-    if (user.role === 'user') {
+    if (user.role === 'driver') {
       // Regular users can only update their own tow records
       tow = await Tow.findOne({ 
         _id: towId, 
